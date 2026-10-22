@@ -1,10 +1,12 @@
 import { ESCAPE_VIDEO } from "./video";
+import { supabase } from "./supabase";
+
 export type Team = {
   id: string;
   name: string;
   code: string;
-  startedAt: number | null;
-  finishedAt: number | null;
+  startedAt: number | null; // when the team pressed Start on its own screen
+  finishedAt: number | null; // when the team entered the right code
   penaltyMs: number;
   wrong: number;
 };
@@ -96,10 +98,31 @@ export function startTeam(teamId: string): { ok: boolean; message: string } {
   return { ok: true, message: "Good luck!" };
 }
 
-export function submitCode(
+// Saves the finish to Supabase. A failure is logged but never blocks the team.
+async function recordResult(team: Team, finishedAt: number) {
+  const elapsed = finishedAt - team.startedAt!;
+  try {
+    const { error } = await supabase.from("results").insert({
+      game_started_at: new Date(game.startedAt!).toISOString(),
+      team_id: team.id,
+      team_name: team.name,
+      started_at: new Date(team.startedAt!).toISOString(),
+      finished_at: new Date(finishedAt).toISOString(),
+      elapsed_ms: elapsed,
+      penalty_ms: team.penaltyMs,
+      wrong: team.wrong,
+      total_ms: elapsed + team.penaltyMs,
+    });
+    if (error) console.error("Failed to record result:", error.message);
+  } catch (e) {
+    console.error("Failed to record result:", e);
+  }
+}
+
+export async function submitCode(
   teamId: string,
   input: string
-): { ok: boolean; message: string; video?: string } {
+): Promise<{ ok: boolean; message: string; video?: string }> {
   if (!game.startedAt) return { ok: false, message: "The game hasn't started yet." };
 
   const team = game.teams.find((t) => t.id === teamId);
@@ -113,10 +136,24 @@ export function submitCode(
     return { ok: false, message: `Wrong code. +${game.penaltyMs / 1000} seconds.` };
   }
 
-    team.finishedAt = Date.now();
+  const finishedAt = Date.now();
+  team.finishedAt = finishedAt;
+  await recordResult(team, finishedAt);
+
   return {
     ok: true,
     message: `${team.name} escaped!`,
     video: ESCAPE_VIDEO,
   };
+  console.log("[submit]", teamId, JSON.stringify(input), JSON.stringify(team.code));
+}
+export async function getResults() {
+  const { data, error } = await supabase
+    .from("results")
+    .select("*")
+    .order("game_started_at", { ascending: false })
+    .order("total_ms", { ascending: true })
+    .limit(500);
+  if (error) throw error;
+  return data;
 }
