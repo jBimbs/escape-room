@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import TeamScreen from "@/components/TeamScreen";
+
 async function Inner({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   return <TeamScreen id={id} />;

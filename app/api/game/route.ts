@@ -4,7 +4,12 @@ import { getResults, publicState, reset, start, startTeam, submitCode } from "@/
 const pinOk = (pin: unknown) => String(pin ?? "") === (process.env.ADMIN_PIN ?? "1234");
 
 export async function GET() {
-  return NextResponse.json(publicState(), { headers: { "Cache-Control": "no-store" } });
+  try {
+    return NextResponse.json(await publicState(), { headers: { "Cache-Control": "no-store" } });
+  } catch (e) {
+    console.error(e);
+    return NextResponse.json({ ok: false, message: "Server error." }, { status: 500 });
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -13,9 +18,9 @@ export async function POST(req: NextRequest) {
   try {
     // A team presses Start on its own screen
     if (body.action === "teamStart") {
-      const result = startTeam(String(body.teamId ?? ""));
+      const result = await startTeam(String(body.teamId ?? ""));
       return NextResponse.json(
-        { ...result, state: publicState() },
+        { ...result, state: await publicState() },
         { status: result.ok ? 200 : 400 }
       );
     }
@@ -24,7 +29,7 @@ export async function POST(req: NextRequest) {
     if (body.action === "submit") {
       const result = await submitCode(String(body.teamId ?? ""), String(body.code ?? ""));
       return NextResponse.json(
-        { ...result, state: publicState() },
+        { ...result, state: await publicState() },
         { status: result.ok ? 200 : 400 }
       );
     }
@@ -39,9 +44,9 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ ok: true, results: await getResults() });
       }
 
-      if (body.action === "start") start();
-      else reset();
-      return NextResponse.json({ ok: true, state: publicState() });
+      if (body.action === "start") await start();
+      else await reset();
+      return NextResponse.json({ ok: true, state: await publicState() });
     }
 
     return NextResponse.json({ ok: false, message: "Unknown action." }, { status: 400 });
