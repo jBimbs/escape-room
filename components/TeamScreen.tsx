@@ -7,8 +7,8 @@ import VideoOverlay from "./VideoOverlay";
 
 const digitFont = Orbitron({ subsets: ["latin"], weight: ["700"] });
 
-const CODE_LENGTH = 6; // must match the length of your team codes
-const NUMERIC = false; // true = digits only (also opens the numeric keypad on phones)
+const CODE_LENGTH = 8; // must match the length of your team codes
+const NUMERIC = true; // true = digits only (also opens the numeric keypad on phones)
 const MASK = false; // true = show • instead of the typed characters
 
 function Lock({ open }: { open: boolean }) {
@@ -176,6 +176,7 @@ export default function TeamScreen({ id }: { id: string }) {
           <div className="archive-row">
             <div
               className={`boxes ${shake ? "shake" : ""}`}
+              style={{ gridTemplateColumns: `repeat(${CODE_LENGTH}, minmax(0, 1fr))` }}
               onClick={() => inputRef.current?.focus()}
             >
               {Array.from({ length: CODE_LENGTH }, (_, i) => {

@@ -128,12 +128,12 @@ html, body { margin: 0; padding: 0; background: #070807; }
 .archive-row { display: flex; gap: 1rem; flex-wrap: wrap; align-items: stretch; }
 
 .boxes {
-  position: relative; flex: 1 1 340px; cursor: text;
-  display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: .6rem;
+  position: relative; flex: 1 1 420px; cursor: text;
+  display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: .5rem;
 }
 .box {
   aspect-ratio: 1 / 1.1; max-height: 68px; display: grid; place-items: center;
-  font-size: 1.7rem; color: #e6f2e9; background: rgba(8,16,10,.6);
+  font-size: 1.5rem; color: #e6f2e9; background: rgba(8,16,10,.6);
   border: 1px solid rgba(143,224,164,.5); border-radius: 4px;
   transition: border-color .15s, box-shadow .15s;
 }
@@ -174,7 +174,7 @@ html, body { margin: 0; padding: 0; background: #070807; }
 @media (max-width: 520px) {
   .plus { display: none; }
   .enter { flex: 1 1 100%; min-height: 52px; }
-  .box { font-size: 1.4rem; }
+  .box { font-size: 1.1rem; }
 }
 @media (prefers-reduced-motion: reduce) {
   .box.active:not(.filled), .badge.live i, .shake { animation: none; }
