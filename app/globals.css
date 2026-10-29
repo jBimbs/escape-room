@@ -229,3 +229,7 @@ html, body { margin: 0; padding: 0; background: #070807; }
 .st-finished { color: #8fe0a4; }
 .st-running { color: #e6c96b; }
 .st-waiting { color: #8fa595; }
+.verified {
+  flex-basis: 100%; text-align: center; font-size: 1.35em; letter-spacing: .32em;
+  color: #c4ffd2; text-shadow: 0 0 12px rgba(159,240,180,.8);
+}

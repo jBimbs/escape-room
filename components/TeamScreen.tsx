@@ -2,13 +2,13 @@
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { Orbitron } from "next/font/google";
 import { fmtMSC, useGame } from "@/lib/useGame";
-import { ESCAPE_VIDEO } from "@/lib/video";
+import { ESCAPE_VIDEO, INTRO_VIDEO } from "@/lib/video";
 import VideoOverlay from "./VideoOverlay";
 
 const digitFont = Orbitron({ subsets: ["latin"], weight: ["700"] });
 
 const CODE_LENGTH = 8; // must match the length of your team codes
-const NUMERIC = true; // true = digits only (also opens the numeric keypad on phones)
+const NUMERIC = true; // digits only (also opens the numeric keypad on phones)
 const MASK = false; // true = show • instead of the typed characters
 
 function Lock({ open }: { open: boolean }) {
@@ -43,12 +43,20 @@ export default function TeamScreen({ id }: { id: string }) {
   const [shake, setShake] = useState(false);
   const [focused, setFocused] = useState(false);
   const [video, setVideo] = useState<string | null>(null);
+  const [recoveredFor, setRecoveredFor] = useState<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const startingRef = useRef(false);
+  const introRef = useRef(false);
 
   const teamState = state?.teams.find((t) => t.id === id);
   const teamStartedAt = teamState?.startedAt;
-  const canStart = !!state && state.startedAt !== null && !!teamState && teamState.startedAt === null;
+  const finishedAt = teamState?.finishedAt ?? null;
+  const done = finishedAt !== null;
+  // Code was correct (timer frozen) but the team hasn't pressed SPACE to recover the files yet
+  const awaitingRecover = done && recoveredFor !== finishedAt;
+  const canStart =
+    !!state && state.startedAt !== null && !!teamState && teamState.startedAt === null;
+  const recoveredKey = `recovered:${id}`;
 
   const startTimer = useCallback(async () => {
     if (startingRef.current) return;
@@ -58,18 +66,44 @@ export default function TeamScreen({ id }: { id: string }) {
     startingRef.current = false;
   }, [post, id]);
 
-  // Space bar starts the team's timer
+  const recover = useCallback(() => {
+    if (finishedAt === null) return;
+    try { sessionStorage.setItem(recoveredKey, String(finishedAt)); } catch {}
+    setRecoveredFor(finishedAt);
+    setVideo(ESCAPE_VIDEO);
+  }, [finishedAt, recoveredKey]);
+
+  // Step 2: the intro video plays when the team opens its screen (not yet started)
   useEffect(() => {
-    if (!canStart) return;
+    if (introRef.current || !teamState) return;
+    introRef.current = true;
+    if (teamState.startedAt === null && teamState.finishedAt === null) setVideo(INTRO_VIDEO);
+  }, [teamState]);
+
+  // Remember (per tab) that this team already recovered the files, so a refresh doesn't ask again
+  useEffect(() => {
+    if (finishedAt === null) {
+      setRecoveredFor(null);
+      return;
+    }
+    try {
+      if (sessionStorage.getItem(recoveredKey) === String(finishedAt)) setRecoveredFor(finishedAt);
+    } catch {}
+  }, [finishedAt, recoveredKey]);
+
+  // SPACE: start the investigation (step 3) or recover the files (step 4)
+  const action: (() => void) | null = canStart ? startTimer : awaitingRecover ? recover : null;
+  useEffect(() => {
+    if (!action || video) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.code === "Space" && !e.repeat) {
         e.preventDefault();
-        startTimer();
+        action();
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [canStart, startTimer]);
+  }, [action, video]);
 
   useEffect(() => {
     if (teamStartedAt) inputRef.current?.focus();
@@ -81,10 +115,9 @@ export default function TeamScreen({ id }: { id: string }) {
 
   const gameOpen = state.startedAt !== null;
   const running = team.startedAt !== null;
-  const done = team.finishedAt !== null;
   const locked = !gameOpen || !running || done;
 
-  // Counts up from the team's own start until it enters the right code.
+  // Counts up from the team's own start; freezes the moment the right code is entered.
   const elapsed = running
     ? (done ? team.finishedAt! : Math.max(nowMs, team.startedAt!)) - team.startedAt!
     : 0;
@@ -100,25 +133,24 @@ export default function TeamScreen({ id }: { id: string }) {
     const r = await post({ action: "submit", teamId: id, code });
     setMsg({ ok: r.ok, text: r.message });
     setCode("");
-    if (r.ok && r.video) {
-      setVideo(r.video);
-      return;
-    }
     if (!r.ok) {
       setShake(true);
       setTimeout(() => setShake(false), 400);
+      inputRef.current?.focus();
     }
-    inputRef.current?.focus();
+    // On success nothing else happens here: the timer freezes and the screen asks for SPACE
   }
 
-  const badge = done
+  const badge = awaitingRecover
+    ? { label: "CODE VERIFIED", tone: "on" }
+    : done
     ? { label: "RECORD RECOVERED", tone: "on" }
     : running
     ? { label: "INVESTIGATION ACTIVE", tone: "live" }
     : { label: "AWAITING INITIALIZATION", tone: "wait" };
 
   const footer = done
-    ? "ACCESS GRANTED"
+    ? awaitingRecover ? "CODE VERIFIED" : "ACCESS GRANTED"
     : msg && !msg.ok
     ? msg.text.toUpperCase()
     : !gameOpen
@@ -151,7 +183,14 @@ export default function TeamScreen({ id }: { id: string }) {
           <hr className="clock-rule" />
 
           <div className="clock-prompt">
-            {done ? (
+            {awaitingRecover ? (
+              <>
+                <span className="verified">CODE VERIFIED</span>
+                <span>PRESS</span>
+                <button type="button" className="spacekey" onClick={recover}>SPACE</button>
+                <span>TO RECOVER THE FILES</span>
+              </>
+            ) : done ? (
               <span>ARCHIVE RECORD RECOVERED</span>
             ) : running ? (
               <span>INVESTIGATION IN PROGRESS{penaltySec > 0 ? ` · PENALTY +${penaltySec}S` : ""}</span>
@@ -159,7 +198,7 @@ export default function TeamScreen({ id }: { id: string }) {
               <>
                 <span>PRESS</span>
                 <button type="button" className="spacekey" onClick={startTimer}>SPACE</button>
-                <span>TO START</span>
+                <span>TO START INVESTIGATION</span>
               </>
             ) : (
               <span>WAITING FOR THE HOST</span>
@@ -229,7 +268,7 @@ export default function TeamScreen({ id }: { id: string }) {
           </p>
         </form>
 
-        {done && (
+        {done && !awaitingRecover && (
           <button
             type="button"
             className="key"
@@ -242,7 +281,13 @@ export default function TeamScreen({ id }: { id: string }) {
       </div>
 
       {running && !done && <video src={ESCAPE_VIDEO} preload="auto" hidden />}
-      {video && <VideoOverlay src={video} onClose={() => setVideo(null)} />}
+      {video && (
+        <VideoOverlay
+          src={video}
+          skippable={video === INTRO_VIDEO}
+          onClose={() => setVideo(null)}
+        />
+      )}
     </main>
   );
 }
